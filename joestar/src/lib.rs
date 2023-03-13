@@ -12,6 +12,14 @@ use wry::application::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 use wry::application::window::{WindowBuilder, WindowId};
 use wry::webview::{WebView, WebViewBuilder};
 
+/// Takes over the main thread and launch Joestar runtime.
+///
+/// Parameters:
+/// * `user_init`: Initialization function to be invoked on user thread.
+///
+/// Remarks:
+/// * It takes over the main thread and (likely) never returns.
+/// * If a logger is to be set up, it should be done before calling this function.
 pub fn launch_runtime(user_init: fn()) {
     let event_loop = EventLoop::<JoEvent>::with_user_event();
     let proxy = event_loop.create_proxy();
@@ -133,6 +141,11 @@ thread_local! {
     static SENDER: RefCell<Option<Sender<Box<dyn FnOnce()>>>> = RefCell::new(None);
 }
 
+/// Configuration of a WebView.
+///
+/// Fields:
+/// * `title`: Title of the window.
+/// * `size`: Initial size of the window.
 #[derive(Debug, Clone)]
 pub struct Spec {
     pub title: String,
@@ -142,6 +155,15 @@ pub struct Spec {
 static VIEW_ID_NEXT: AtomicUsize = AtomicUsize::new(0);
 static mut VIEW_CUR: Vec<usize> = Vec::new();
 
+/// Handle to a WebView.
+///
+/// Remarks:
+/// * Only operate with the user runtime thread.
+///     * This is enforced by the usage of a thread local static value of event loop proxy.
+/// * The behaviour is not the same as plain old Rust stuffs.
+///     * It doesn't destroy the WebView when it is dropped.
+///     * In fact, the `acquire` function is used to gain access to a WebView through its index.
+///     * You need to call `destroy` to dispose the WebView.
 #[repr(transparent)]
 #[derive(Debug, Clone)]
 pub struct View {
@@ -149,6 +171,7 @@ pub struct View {
 }
 
 impl View {
+    /// Create a new WebView.
     pub fn new(spec: Spec) -> Self {
         let ord = VIEW_ID_NEXT.fetch_add(1, Ordering::SeqCst);
         PROXY.with(move |static_proxy| {
@@ -162,10 +185,15 @@ impl View {
         Self { ord }
     }
 
+    /// Acquire an existing WebView by its index.
     pub fn acquire(id: usize) -> Option<Self> {
         unsafe { VIEW_CUR.get(id).map(|_| Self { ord: id }) }
     }
 
+    /// Evaluate arbitrary JavaScript code in the WebView.
+    ///
+    /// Remarks:
+    /// * Safety concern: You need to know what you are doing.
     pub fn eval(&self, script: String) {
         PROXY.with(move |static_proxy| {
             static_proxy.borrow().as_ref().unwrap()
@@ -176,6 +204,7 @@ impl View {
         });
     }
 
+    /// Destroy the WebView.
     pub fn destroy(self) {
         PROXY.with(move |static_proxy| {
             static_proxy.borrow().as_ref().unwrap()
@@ -186,6 +215,7 @@ impl View {
         unsafe { VIEW_CUR.swap_remove(self.ord); }
     }
 
+    /// Fill an element as the root node of content.
     pub fn fill(&self, model: &Model) {
         PROXY.with(move |static_proxy| {
             static_proxy.borrow().as_ref().unwrap()
@@ -196,10 +226,12 @@ impl View {
         });
     }
 
+    /// Get the index of the WebView.
     pub fn ord(&self) -> usize {
         self.ord
     }
 
+    /// Get the agent to the root node of content.
     pub fn root(&self) -> Agent {
         Agent {
             ord: self.ord,
@@ -207,6 +239,7 @@ impl View {
         }
     }
 
+    /// Get the agent to an element by its ID.
     pub fn lookup<S>(&self, id: S) -> Agent where S: Into<String> {
         Agent {
             ord: self.ord,
@@ -217,6 +250,10 @@ impl View {
 
 pub type WrappedCallback = Box<dyn FnMut(String, HashMap<String, String>)>;
 
+/// Model of a DOM element.
+///
+/// Remarks:
+/// * All of the values are unchecked and not escaped, so be careful.
 pub struct Model {
     tag: String,
     id: Option<String>,
@@ -227,6 +264,7 @@ pub struct Model {
 }
 
 impl Model {
+    /// Create a new Model.
     pub fn new<S: Into<String>>(tag: S) -> Self {
         Self {
             tag: tag.into(),
@@ -238,26 +276,41 @@ impl Model {
         }
     }
 
+    /// Set the ID of the element.
+    ///
+    /// Remarks:
+    /// * It does not check the correctness of the ID.
     pub fn with_id<S: Into<String>>(mut self, id: S) -> Self {
         self.id = Some(id.into());
         self
     }
 
+    /// Set an attribute of the element.
+    ///
+    /// Remarks:
+    /// * It does not check the correctness of the attribute.
+    /// * It does not reject `style` or `id` attributes.
     pub fn with_attr<S1: Into<String>, S2: Into<String>>(mut self, key: S1, val: S2) -> Self {
         self.attrs.insert(key.into(), val.into());
         self
     }
 
+    /// Set a style of the element.
+    ///
+    /// Remarks:
+    /// * It does not check the correctness of the style.
     pub fn with_style<S1: Into<String>, S2: Into<String>>(mut self, key: S1, val: S2) -> Self {
         self.style.insert(key.into(), val.into());
         self
     }
 
+    /// Add a child element.
     pub fn with_child(mut self, child: Model) -> Self {
         self.children.push(child);
         self
     }
 
+    /// Set the text content of the element.
     pub fn with_text<S: Into<String>>(mut self, text: S) -> Self {
         self.text = Some(text.into());
         self
@@ -312,12 +365,26 @@ fn invoke_callback(index: usize, path: &str, detail: HashMap<String, String>) {
     callback(Agent::from(path), detail)
 }
 
+/// Position of an element.
+///
+/// Variants:
+/// * Path: The path from the root node of content.
+/// * IdPath: The path from the element with the given ID.
+///
+/// Remarks:
+/// * The path is a sequence of indices of children.
+/// * The path is empty for the root node of content or the element with the given ID.
 #[derive(Debug, Clone)]
 pub enum Position {
     Path(Vec<usize>),
     IdPath(String, Vec<usize>),
 }
 
+/// Agent to an element.
+///
+/// Remarks:
+/// * The agent doesn't directly hold the element.
+/// * It doesn't check the correctness of the path or ID.
 #[derive(Debug, Clone)]
 pub struct Agent {
     ord: usize,
@@ -351,6 +418,7 @@ impl Agent {
         format!("{} = {}", get_script, target)
     }
 
+    /// Get the agent to an element with path relative to the current element.
     pub fn solve(&self, path: Vec<usize>) -> Self {
         let position = match &self.position {
             Position::Path(p) => Position::Path([&p[..], &path[..]].concat()),
@@ -363,10 +431,17 @@ impl Agent {
         }
     }
 
+    /// Get the WebView.
     pub fn view(&self) -> Option<View> {
         View::acquire(self.ord)
     }
 
+    /// Bind an callback to a DOM event.
+    ///
+    /// Remarks:
+    /// * The callback is unique regarding to the event key.
+    ///     * If the callback is already bound, it is replaced.
+    /// * The callback is called with the agent to the element and the detail of the event.
     pub fn bind<F>(&self, key: &str, callback: F) -> Callback
     where
         F: FnMut(Agent, HashMap<String, String>) + 'static,
@@ -382,6 +457,7 @@ impl Agent {
         callback
     }
 
+    /// Unbind the callback to a DOM event.
     pub fn unbind(&self, key: &str) {
         let script = format!(
             "let elem = {};_lk_unreg_evt(elem, \"{}\");",
@@ -391,6 +467,7 @@ impl Agent {
             .send_event(JoEvent::EvalScript { ord: self.ord, script }).unwrap());
     }
 
+    /// Set the specified attribute.
     pub fn set(&self, key: &str, val: &str) {
         let script = format!(
             "{{let elem = {};elem.setAttribute(\"{}\", \"{}\");}}",
@@ -400,6 +477,7 @@ impl Agent {
             .send_event(JoEvent::EvalScript { ord: self.ord, script }).unwrap());
     }
 
+    /// Set the specified style.
     pub fn set_style(&self, key: &str, val: &str) {
         let script = format!(
             "{{let elem = {};elem.style.setProperty(\"{}\", \"{}\");}}",
@@ -462,6 +540,7 @@ impl From<&str> for Agent {
     }
 }
 
+/// A handle of callback to a DOM event.
 pub struct Callback {
     id: usize,
 }
@@ -472,6 +551,7 @@ static mut CALLBACKS: BTreeMap<usize, CallbackFunc> = BTreeMap::new();
 static CALLBACK_ID_NEXT: AtomicUsize = AtomicUsize::new(0);
 
 impl Callback {
+    /// Register a callback.
     pub fn create<F>(f: F) -> Self
     where
         F: FnMut(Agent, HashMap<String, String>) + 'static,
@@ -483,6 +563,7 @@ impl Callback {
         Callback { id }
     }
 
+    /// Get a callback by its id.
     pub fn get(id: usize) -> Option<Self> {
         if unsafe { CALLBACKS.contains_key(&id) } {
             Some(Callback { id })
@@ -491,12 +572,14 @@ impl Callback {
         }
     }
 
+    /// Remove the callback from the registry.
     pub fn remove(self) {
         unsafe {
             CALLBACKS.remove(&self.id);
         }
     }
 
+    /// Invoke the callback.
     pub fn invoke(&self, agent: Agent, detail: HashMap<String, String>) {
         let callback = unsafe { CALLBACKS.get_mut(&self.id).unwrap() };
         callback(agent, detail)

@@ -980,6 +980,14 @@ version = "0.1.0"
 dependencies = [
  "env_logger",
  "joestar",
+ "joestar-html",
+]
+
+[[package]]
+name = "joestar-html"
+version = "0.1.0"
+dependencies = [
+ "joestar",
 ]
 
 [[package]]
