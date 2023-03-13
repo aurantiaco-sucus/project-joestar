@@ -390,6 +390,25 @@ impl Agent {
         PROXY.with(move |proxy| proxy.borrow().as_ref().unwrap()
             .send_event(JoEvent::EvalScript { ord: self.ord, script }).unwrap());
     }
+
+    pub fn set(&self, key: &str, val: &str) {
+        let script = format!(
+            "{{let elem = {};elem.setAttribute(\"{}\", \"{}\");}}",
+            self.script_get_element(), key, val,
+        );
+        PROXY.with(move |proxy| proxy.borrow().as_ref().unwrap()
+            .send_event(JoEvent::EvalScript { ord: self.ord, script }).unwrap());
+    }
+
+    pub fn set_style(&self, key: &str, val: &str) {
+        let script = format!(
+            "{{let elem = {};elem.style.setProperty(\"{}\", \"{}\");}}",
+            self.script_get_element(), key, val,
+        );
+        println!("{}", script);
+        PROXY.with(move |proxy| proxy.borrow().as_ref().unwrap()
+            .send_event(JoEvent::EvalScript { ord: self.ord, script }).unwrap());
+    }
 }
 
 impl Into<String> for Agent {

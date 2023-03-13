@@ -22,8 +22,10 @@ fn user_main() {
             .with_text("Click me!"));
     main.fill(&main_model);
 
-    let button1 = main.lookup("button1");
+    let div = main.root();
+    div.set_style("background-color", "red");
 
+    let button1 = main.lookup("button1");
     let button1_click = button1
         .bind("click", |event, detail| {
             println!("Button clicked!");
