@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+</head>
+<body>
+<script>
+    let __lk_listeners = {};
+
+    function _lk_reg_evt(elem, ev_key, ev_path, cb_i) {
+        if (__lk_listeners[elem] === undefined) {
+            __lk_listeners[elem] = {}
+        }
+        if (__lk_listeners[elem][ev_key] === undefined) {
+            let ignored_types = ["function", "object"]
+            let listener = function (e) {
+                let result = ev_path + "," + event_key + "," + cb_i
+                for (let key in event) {
+                    if (ignored_types.includes(typeof event[key])) continue
+                    result += "\n" + key + "\n" + event[key]
+                }
+                window.ipc.postMessage(result)
+            };
+            elem.addEventListener(ev_key, listener);
+            __lk_listeners[elem][ev_key] = listener;
+        }
+    }
+
+    function _lk_rem_evt(elem, ev_key) {
+        if (__lk_listeners[elem] === undefined) return;
+        if (__lk_listeners[elem][ev_key] === undefined) return;
+        elem.removeEventListener(ev_key, __lk_listeners[elem][ev_key]);
+        delete __lk_listeners[elem][ev_key];
+    }
+</script>
+</body>
+</html>
