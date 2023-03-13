@@ -216,12 +216,13 @@ impl View {
     }
 
     /// Fill an element as the root node of content.
-    pub fn fill(&self, model: &Model) {
+    pub fn fill(&self, model: Model) {
         PROXY.with(move |static_proxy| {
             static_proxy.borrow().as_ref().unwrap()
                 .send_event(JoEvent::EvalScript {
                     ord: self.ord,
-                    script: format!("document.body.innerHTML = `{}`;", html_string(model))
+                    script: format!("document.body.innerHTML = `{}`;",
+                                    html_string(&model))
                 }).unwrap();
         });
     }
@@ -280,7 +281,7 @@ impl Model {
     ///
     /// Remarks:
     /// * It does not check the correctness of the ID.
-    pub fn with_id<S: Into<String>>(mut self, id: S) -> Self {
+    pub fn id<S: Into<String>>(mut self, id: S) -> Self {
         self.id = Some(id.into());
         self
     }
@@ -290,7 +291,7 @@ impl Model {
     /// Remarks:
     /// * It does not check the correctness of the attribute.
     /// * It does not reject `style` or `id` attributes.
-    pub fn with_attr<S1: Into<String>, S2: Into<String>>(mut self, key: S1, val: S2) -> Self {
+    pub fn attr<S1: Into<String>, S2: Into<String>>(mut self, key: S1, val: S2) -> Self {
         self.attrs.insert(key.into(), val.into());
         self
     }
@@ -299,19 +300,25 @@ impl Model {
     ///
     /// Remarks:
     /// * It does not check the correctness of the style.
-    pub fn with_style<S1: Into<String>, S2: Into<String>>(mut self, key: S1, val: S2) -> Self {
+    pub fn style<S1: Into<String>, S2: Into<String>>(mut self, key: S1, val: S2) -> Self {
         self.style.insert(key.into(), val.into());
         self
     }
 
     /// Add a child element.
-    pub fn with_child(mut self, child: Model) -> Self {
+    pub fn child(mut self, child: Model) -> Self {
         self.children.push(child);
         self
     }
 
+    /// Add child elements.
+    pub fn children(mut self, children: Vec<Model>) -> Self {
+        self.children.extend(children);
+        self
+    }
+
     /// Set the text content of the element.
-    pub fn with_text<S: Into<String>>(mut self, text: S) -> Self {
+    pub fn text<S: Into<String>>(mut self, text: S) -> Self {
         self.text = Some(text.into());
         self
     }
