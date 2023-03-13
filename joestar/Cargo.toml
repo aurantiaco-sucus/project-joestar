@@ -2,6 +2,15 @@
 name = "joestar"
 version = "0.1.0"
 edition = "2021"
+license = "Apache-2.0"
+keywords = ["ui", "html", "javascript", "native"]
+categories = ["gui"]
+description = "Wry-based simple WebUI platform for Rust"
+readme = "../README.md"
+repository = "https://github.com/aurantiaco-sucus/project-joestar"
+
+[badges]
+maintenance = { status = "actively-developed" }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
