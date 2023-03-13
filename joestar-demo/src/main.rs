@@ -1,4 +1,4 @@
-use joestar::{launch_runtime, Model, Spec, View};
+use joestar::{Callback, launch_runtime, Model, Spec, View};
 
 fn main() {
     env_logger::init();
@@ -21,4 +21,11 @@ fn user_main() {
             .with_attr("type", "button")
             .with_text("Click me!"));
     main.fill(&main_model);
+
+    let button1 = main.lookup("button1");
+
+    let button1_click = button1
+        .bind("click", |event, detail| {
+            println!("Button clicked!");
+        });
 }

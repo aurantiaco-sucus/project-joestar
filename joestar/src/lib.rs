@@ -53,15 +53,33 @@ pub fn launch_runtime(user_init: fn()) {
                     let web_view = WebViewBuilder::new(window).unwrap()
                         .with_html(include_str!("index.html")).unwrap()
                         .with_ipc_handler(|window, raw| {
+                            if raw.starts_with('$') {
+                                let raw = &raw[1..];
+                                let mut raw = raw.split(':');
+                                let cmd = raw.next().unwrap();
+                                let arg = raw.next().unwrap();
+                                match cmd {
+                                    "dedup" => {
+                                        let n = arg.parse().unwrap();
+                                        Callback::get(n).unwrap().remove();
+                                    }
+                                    "@" => {}
+                                    _ => {}
+                                }
+                            }
                             let mut raw = raw.lines();
                             let head = raw.next().unwrap();
-                            let mut head = head.split(",");
-                            let id = head.next().unwrap();
-                            let key = head.next().unwrap();
+                            let mut head = head.split(">>>");
+                            let path = head.next().unwrap();
+                            let agent = Agent::from(path);
+                            let cb_index: usize = head.next().unwrap().parse().unwrap();
                             let mut detail: HashMap<String, String> = HashMap::new();
                             while let Some(key) = raw.next() {
                                 let value = raw.next().unwrap();
                                 detail.insert(key.into(), value.into());
+                            }
+                            if let Some(callback) = Callback::get(cb_index) {
+                                callback.invoke(agent, detail);
                             }
                         })
                         .build().unwrap();
@@ -181,6 +199,20 @@ impl View {
     pub fn ord(&self) -> usize {
         self.ord
     }
+
+    pub fn root(&self) -> Agent {
+        Agent {
+            ord: self.ord,
+            position: Position::Path(vec![]),
+        }
+    }
+
+    pub fn lookup<S>(&self, id: S) -> Agent where S: Into<String> {
+        Agent {
+            ord: self.ord,
+            position: Position::IdPath(id.into(), vec![]),
+        }
+    }
 }
 
 pub type WrappedCallback = Box<dyn FnMut(String, HashMap<String, String>)>;
@@ -275,11 +307,9 @@ fn html_string(model: &Model) -> String {
     result
 }
 
-fn invoke_callback(path: &str, key: &str, detail: HashMap<String, String>) {
-    let handler = unsafe { HANDLERS.get_mut(&ord).unwrap() }
-        .get_mut(id).unwrap()
-        .get_mut(key).unwrap();
-    handler(id.to_string(), detail);
+fn invoke_callback(index: usize, path: &str, detail: HashMap<String, String>) {
+    let callback = unsafe { CALLBACKS.get_mut(&index).unwrap() };
+    callback(Agent::from(path), detail)
 }
 
 #[derive(Debug, Clone)]
@@ -337,27 +367,27 @@ impl Agent {
         View::acquire(self.ord)
     }
 
-    pub fn bind<F>(&self, key: &str, callback: F) -> usize
+    pub fn bind<F>(&self, key: &str, callback: F) -> Callback
     where
         F: FnMut(Agent, HashMap<String, String>) + 'static,
     {
         let callback = Callback::create(callback);
         let path: String = self.clone().into();
-        let mut script = format!(
+        let script = format!(
             "let elem = {};_lk_reg_evt(elem, \"{}\", \"{}\", \"{}\");",
             self.script_get_element(), key, path, callback.id,
         );
-        PROXY.with(move |proxy| proxy.borrow().unwrap()
+        PROXY.with(move |proxy| proxy.borrow().as_ref().unwrap()
             .send_event(JoEvent::EvalScript { ord: self.ord, script }).unwrap());
-        callback.id
+        callback
     }
 
     pub fn unbind(&self, key: &str) {
-        let mut script = format!(
+        let script = format!(
             "let elem = {};_lk_unreg_evt(elem, \"{}\");",
             self.script_get_element(), key,
         );
-        PROXY.with(move |proxy| proxy.borrow().unwrap()
+        PROXY.with(move |proxy| proxy.borrow().as_ref().unwrap()
             .send_event(JoEvent::EvalScript { ord: self.ord, script }).unwrap());
     }
 }
@@ -383,8 +413,8 @@ impl Into<String> for Agent {
     }
 }
 
-impl From<String> for Agent {
-    fn from(s: String) -> Self {
+impl From<&str> for Agent {
+    fn from(s: &str) -> Self {
         let mut s = s.trim().split(':');
         let head = s.next().unwrap();
         let tail = s.next().unwrap();
@@ -393,6 +423,7 @@ impl From<String> for Agent {
         if let Some(id) = head.next() {
             let mut path = Vec::new();
             for i in tail.split(',') {
+                if i.is_empty() { continue; }
                 path.push(i.parse::<usize>().unwrap());
             }
             Agent {
@@ -445,5 +476,10 @@ impl Callback {
         unsafe {
             CALLBACKS.remove(&self.id);
         }
+    }
+
+    pub fn invoke(&self, agent: Agent, detail: HashMap<String, String>) {
+        let callback = unsafe { CALLBACKS.get_mut(&self.id).unwrap() };
+        callback(agent, detail)
     }
 }

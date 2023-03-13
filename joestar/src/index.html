@@ -15,7 +15,7 @@
         if (__lk_listeners[elem][ev_key] === undefined) {
             let ignored_types = ["function", "object"]
             let listener = function (e) {
-                let result = ev_path + "," + event_key + "," + cb_i
+                let result = ev_path + ">>>" + cb_i
                 for (let key in event) {
                     if (ignored_types.includes(typeof event[key])) continue
                     result += "\n" + key + "\n" + event[key]
@@ -23,14 +23,20 @@
                 window.ipc.postMessage(result)
             };
             elem.addEventListener(ev_key, listener);
-            __lk_listeners[elem][ev_key] = listener;
+            __lk_listeners[elem][ev_key] = {
+                func: listener,
+                cb_i: cb_i
+            };
+        } else {
+            window.ipc.postMessage("$dedup:" + __lk_listeners[elem][ev_key].cb_i)
+            __lk_listeners[elem][ev_key].cb_i = cb_i
         }
     }
 
     function _lk_rem_evt(elem, ev_key) {
         if (__lk_listeners[elem] === undefined) return;
         if (__lk_listeners[elem][ev_key] === undefined) return;
-        elem.removeEventListener(ev_key, __lk_listeners[elem][ev_key]);
+        elem.removeEventListener(ev_key, __lk_listeners[elem][ev_key].func);
         delete __lk_listeners[elem][ev_key];
     }
 </script>
