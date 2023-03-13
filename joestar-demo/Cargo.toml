@@ -7,6 +7,6 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-joestar = { version = "0.1.0", path = "../joestar" }
+joestar = { path = "../joestar" }
 joestar-html = { path = "../joestar-html" }
 env_logger = "0.10.0"
