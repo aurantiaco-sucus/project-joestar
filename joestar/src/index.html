@@ -7,18 +7,45 @@
 <body>
 <script>
     let __lk_listeners = {};
+    let __ignored_types = [
+        "function",
+        "object"
+    ]
+    let __ignored_fields = [
+        "target",
+        "currentTarget",
+        "srcElement",
+        "path",
+        "returnValue",
+        "cancelBubble",
+        "composedPath",
+        "isTrusted",
+        "bubbles",
+        "cancelable",
+        "defaultPrevented",
+        "eventPhase",
+        "isTrusted",
+        "timeStamp",
+        "type"
+    ]
 
     function _lk_reg_evt(elem, ev_key, ev_path, cb_i) {
         if (__lk_listeners[elem] === undefined) {
             __lk_listeners[elem] = {}
         }
         if (__lk_listeners[elem][ev_key] === undefined) {
-            let ignored_types = ["function", "object"]
             let listener = function (e) {
                 let result = ev_path + ">>>" + cb_i
                 for (let key in event) {
-                    if (ignored_types.includes(typeof event[key])) continue
+                    // ignore some types
+                    if (__ignored_types.includes(typeof event[key])) continue
+                    // ignore some fields
+                    if (__ignored_fields.includes(key)) continue
                     result += "\n" + key + "\n" + event[key]
+                }
+                // include value if present
+                if (e.target.value !== undefined) {
+                    result += "\nlikit_value\n" + e.target.value + "\n"
                 }
                 window.ipc.postMessage(result)
             };
@@ -28,6 +55,7 @@
                 cb_i: cb_i
             };
         } else {
+            // tell backend to drop the old callback
             window.ipc.postMessage("$dedup:" + __lk_listeners[elem][ev_key].cb_i)
             __lk_listeners[elem][ev_key].cb_i = cb_i
         }

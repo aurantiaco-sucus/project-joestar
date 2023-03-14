@@ -1,5 +1,5 @@
 use joestar::{Callback, launch_runtime, Model, Spec, View};
-use joestar_html::{AgentExt, button, div, h1, p};
+use joestar_html::{AgentExt, button, div, h1, input, p};
 
 fn main() {
     env_logger::init();
@@ -16,14 +16,19 @@ fn user_main() {
         .children(vec![
             h1("Hello World!"),
             p("This is a paragraph."),
-            button("button1", "Click me!"),
+            button("Click me!")
+                .id("button1"),
+            input("text")
+                .id("input1"),
         ]));
 
-    let div = main.root();
-    div.set_style("background-color", "red");
-
     let button1 = main.lookup("button1");
-    button1.on_click(|_| {
-        println!("Button clicked!");
+    button1.on_click(|detail| {
+        println!("Click: {:#?}", detail);
+    });
+
+    let input1 = main.lookup("input1");
+    input1.on_input(|detail| {
+        println!("Input: {:#?}", detail);
     });
 }
