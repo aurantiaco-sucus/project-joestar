@@ -1,11 +1,11 @@
 [package]
 name = "joestar-html"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "Apache-2.0"
 keywords = ["ui", "html", "javascript", "native"]
 categories = ["gui"]
-description = "Wry-based simple WebUI platform for Rust - HTML Candies"
+description = "Wry-based simple HTML5-based native UI platform for Rust - HTML Goodies"
 readme = "../README.md"
 repository = "https://github.com/aurantiaco-sucus/project-joestar"
 
@@ -15,4 +15,4 @@ maintenance = { status = "actively-developed" }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-joestar = { version = "0.1.0", path = "../joestar" }
+joestar = { version = "0.1.1", path = "../joestar" }
