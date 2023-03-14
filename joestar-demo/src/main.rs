@@ -22,13 +22,11 @@ fn user_main() {
                 .id("input1"),
         ]));
 
-    let button1 = main.lookup("button1");
-    button1.on_click(|detail| {
+    main.lookup("button1").on_click(|detail| {
         println!("Click: {:#?}", detail);
     });
 
-    let input1 = main.lookup("input1");
-    input1.on_input(|detail| {
+    main.lookup("input1").on_input(|detail| {
         println!("Input: {:#?}", detail);
     });
 }
