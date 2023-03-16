@@ -55,8 +55,6 @@
                 cb_i: cb_i
             };
         } else {
-            // tell backend to drop the old callback
-            window.ipc.postMessage("$dedup:" + __lk_listeners[elem][ev_key].cb_i)
             __lk_listeners[elem][ev_key].cb_i = cb_i
         }
     }

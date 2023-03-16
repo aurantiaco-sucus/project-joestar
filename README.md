@@ -33,7 +33,7 @@ It's named after [Joseph Joestar](https://jojo.fandom.com/wiki/Joseph_Joestar), 
 Required packages are `joestar` and `joestar-html`.
 
 ```Rust
-use joestar::{Callback, launch_runtime, Model, Spec, View};
+use joestar::{Callback, joestar_terminate, launch_runtime, Model, Spec, View};
 use joestar_html::{AgentExt, button, div, h1, input, p};
 
 fn main() {
@@ -45,6 +45,13 @@ fn user_main() {
     let main = View::new(Spec {
         title: "Main".to_string(),
         size: (800, 600),
+    });
+    let main_ord = main.ord();
+
+    main.on_close_request(move || {
+        println!("See you next time!");
+        View::acquire(main_ord).unwrap().destroy();
+        joestar_terminate();
     });
 
     main.fill(div()

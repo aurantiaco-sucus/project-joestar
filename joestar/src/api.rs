@@ -1,6 +1,8 @@
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Debug};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread;
 
 use crate::rt::*;
 
@@ -15,8 +17,27 @@ pub struct Spec {
     pub size: (u32, u32),
 }
 
-static VIEW_ID_NEXT: AtomicUsize = AtomicUsize::new(0);
-static mut VIEW_CUR: Vec<usize> = Vec::new();
+thread_local! {
+    static VIEW_ID_NEXT: AtomicUsize = AtomicUsize::new(0);
+    static VIEW_CUR: RefCell<Vec<usize>> = RefCell::new(Vec::new());
+    static VIEW_EVENTS: RefCell<BTreeMap<usize, BTreeMap<String, usize>>> = RefCell::new(BTreeMap::new());
+}
+
+fn next_view_id() -> usize {
+    VIEW_ID_NEXT.with(|id| id.fetch_add(1, Ordering::SeqCst))
+}
+
+fn add_cur_view(id: usize) {
+    VIEW_CUR.with(|cur| cur.borrow_mut().push(id));
+}
+
+fn remove_cur_view(id: usize) {
+    VIEW_CUR.with(|cur| {
+        let mut cur = cur.borrow_mut();
+        let index = cur.iter().position(|x| *x == id).unwrap();
+        cur.swap_remove(index);
+    });
+}
 
 /// Handle to a WebView.
 ///
@@ -36,7 +57,7 @@ pub struct View {
 impl View {
     /// Create a new WebView.
     pub fn new(spec: Spec) -> Self {
-        let ord = VIEW_ID_NEXT.fetch_add(1, Ordering::SeqCst);
+        let ord = next_view_id();
         PROXY.with(move |static_proxy| {
             static_proxy.borrow().as_ref().unwrap()
                 .send_event(JoEvent::CreateWebView {
@@ -44,13 +65,19 @@ impl View {
                     spec,
                 }).unwrap();
         });
-        unsafe { VIEW_CUR.push(ord); }
+        add_cur_view(ord);
         Self { ord }
     }
 
     /// Acquire an existing WebView by its index.
     pub fn acquire(id: usize) -> Option<Self> {
-        unsafe { VIEW_CUR.get(id).map(|_| Self { ord: id }) }
+        VIEW_CUR.with(|cur| {
+            if cur.borrow().contains(&id) {
+                Some(Self { ord: id })
+            } else {
+                None
+            }
+        })
     }
 
     /// Evaluate arbitrary JavaScript code in the WebView.
@@ -75,7 +102,7 @@ impl View {
                     ord: self.ord,
                 }).unwrap();
         });
-        unsafe { VIEW_CUR.swap_remove(self.ord); }
+        remove_cur_view(self.ord);
     }
 
     /// Fill an element as the root node of content.
@@ -109,6 +136,33 @@ impl View {
             position: Position::IdPath(id.into(), vec![]),
         }
     }
+
+    /// Bind an callback to a View event.
+    ///
+    /// Remarks:
+    /// * The callback is unique regarding to the event key.
+    ///     * If the callback is already bound, it is replaced.
+    /// * The callback is called with the agent to the element and the detail of the event.
+    pub fn bind<F>(&self, key: ViewEventKey, callback: F) -> Callback
+        where
+            F: FnMut(Agent, HashMap<String, String>) + 'static,
+    {
+        let callback = Callback::create(callback);
+        PROXY.with(|proxy| proxy.borrow_mut().as_ref().unwrap()
+            .send_event(JoEvent::RegisterEvent {
+                ord: self.ord,
+                key,
+                cb_index: callback.id,
+            }).unwrap());
+        callback
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Ord, PartialOrd, Eq, Hash)]
+pub enum ViewEventKey {
+    CloseRequest,
+    Resize,
+    Move,
 }
 
 pub type WrappedCallback = Box<dyn FnMut(String, HashMap<String, String>)>;
@@ -262,6 +316,13 @@ pub struct Agent {
 }
 
 impl Agent {
+    pub(crate) fn invalid() -> Self {
+        Self {
+            ord: usize::MAX,
+            position: Position::Path(vec![]),
+        }
+    }
+
     fn script_get_element(&self) -> String {
         match &self.position {
             Position::Path(path) => {
@@ -454,4 +515,42 @@ impl Callback {
         let callback = unsafe { CALLBACKS.get_mut(&self.id).unwrap() };
         callback(agent, detail)
     }
+}
+
+impl View {
+    pub fn on_move<F>(&self, mut callback: F) -> Callback
+        where
+            F: FnMut((i32, i32)) + 'static,
+    {
+        self.bind(ViewEventKey::Move, move |_, detail| {
+            let x = detail.get("x").unwrap().parse::<i32>().unwrap();
+            let y = detail.get("y").unwrap().parse::<i32>().unwrap();
+            callback((x, y));
+        })
+    }
+
+    pub fn on_resize<F>(&self, mut callback: F) -> Callback
+        where
+            F: FnMut((u32, u32)) + 'static,
+    {
+        self.bind(ViewEventKey::Resize, move |_, detail| {
+            let w = detail.get("width").unwrap().parse::<u32>().unwrap();
+            let h = detail.get("height").unwrap().parse::<u32>().unwrap();
+            callback((w, h));
+        })
+    }
+
+    pub fn on_close_request<F>(&self, mut callback: F) -> Callback
+        where
+            F: FnMut() + 'static,
+    {
+        self.bind(ViewEventKey::CloseRequest, move |_, _| {
+            callback();
+        })
+    }
+}
+
+pub fn joestar_terminate() {
+    PROXY.with(move |proxy| proxy.borrow().as_ref().unwrap()
+        .send_event(JoEvent::Terminate).unwrap());
 }
