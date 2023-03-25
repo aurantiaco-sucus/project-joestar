@@ -113,48 +113,185 @@ impl ValueDetail {
     }
 }
 
-pub trait AgentExt {
-    fn on_click<F>(&self, f: F) -> Callback
-    where
-        F: Fn(ClickDetail) + 'static;
-
-    fn on_input<F>(&self, f: F) -> Callback
-    where
-        F: Fn(ValueDetail) + 'static;
-
-    fn on_change<F>(&self, f: F) -> Callback
-    where
-        F: Fn(ValueDetail) + 'static;
+pub trait ModelLike : Sized {
+    fn model(self) -> Model;
 }
 
-impl AgentExt for Agent {
+impl ModelLike for Model {
+    fn model(self) -> Model {
+        self
+    }
+}
+
+pub trait ModelExt : ModelLike {
+    fn display(self, kind: DisplayType) -> Model {
+        self.model()
+            .style("display", kind)
+    }
+
+    fn width(self, width: Length) -> Model {
+        self.model()
+            .style("width", width)
+    }
+
+    fn height(self, height: Length) -> Model {
+        self.model()
+            .style("height", height)
+    }
+
+    fn flex_grow(self, grow: u32) -> Model {
+        self.model()
+            .style("flex-grow", grow.to_string())
+    }
+
+    fn flex_shrink(self, shrink: u32) -> Model {
+        self.model()
+            .style("flex-shrink", shrink.to_string())
+    }
+
+    fn flex_fill(self) -> Model {
+        self.model()
+            .style("flex", "1")
+    }
+}
+
+impl<T: ModelLike> ModelExt for T {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DisplayType {
+    Block,
+    Flex,
+    Inline,
+    InlineBlock,
+    InlineFlex,
+    InlineTable,
+    ListItem,
+    None,
+    RunIn,
+    Table,
+    TableCaption,
+    TableCell,
+    TableColumn,
+    TableColumnGroup,
+    TableFooterGroup,
+    TableHeaderGroup,
+    TableRow,
+    TableRowGroup,
+    TableLayoutAuto,
+    TableLayoutFixed,
+    Initial,
+    Inherit,
+}
+
+impl From<DisplayType> for String {
+    fn from(display: DisplayType) -> Self {
+        match display {
+            DisplayType::Block => "block",
+            DisplayType::Flex => "flex",
+            DisplayType::Inline => "inline",
+            DisplayType::InlineBlock => "inline-block",
+            DisplayType::InlineFlex => "inline-flex",
+            DisplayType::InlineTable => "inline-table",
+            DisplayType::ListItem => "list-item",
+            DisplayType::None => "none",
+            DisplayType::RunIn => "run-in",
+            DisplayType::Table => "table",
+            DisplayType::TableCaption => "table-caption",
+            DisplayType::TableCell => "table-cell",
+            DisplayType::TableColumn => "table-column",
+            DisplayType::TableColumnGroup => "table-column-group",
+            DisplayType::TableFooterGroup => "table-footer-group",
+            DisplayType::TableHeaderGroup => "table-header-group",
+            DisplayType::TableRow => "table-row",
+            DisplayType::TableRowGroup => "table-row-group",
+            DisplayType::TableLayoutAuto => "auto",
+            DisplayType::TableLayoutFixed => "fixed",
+            DisplayType::Initial => "initial",
+            DisplayType::Inherit => "inherit",
+        }
+        .to_string()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Length {
+    Px(f32),
+    Em(f32),
+    Rem(f32),
+    Percent(f32),
+}
+
+impl From<Length> for String {
+    fn from(length: Length) -> Self {
+        match length {
+            Length::Px(px) => format!("{}px", px),
+            Length::Em(em) => format!("{}em", em),
+            Length::Rem(rem) => format!("{}rem", rem),
+            Length::Percent(percent) => format!("{}%", percent),
+        }
+    }
+}
+
+pub trait AgentLike : Sized {
+    fn as_agent(&self) -> &Agent;
+}
+
+impl AgentLike for Agent {
+    fn as_agent(&self) -> &Agent {
+        self
+    }
+}
+
+pub trait AgentExt : AgentLike {
     fn on_click<F>(&self, f: F) -> Callback
-    where
-        F: Fn(ClickDetail) + 'static,
+        where
+            F: Fn(ClickDetail) + 'static,
     {
-        self.bind("click", move |agent, detail| {
+        self.as_agent().bind("click", move |agent, detail| {
             let detail = ClickDetail::from_event(&detail).unwrap();
             f(detail);
         })
     }
 
     fn on_input<F>(&self, f: F) -> Callback
-    where
-        F: Fn(ValueDetail) + 'static,
+        where
+            F: Fn(ValueDetail) + 'static,
     {
-        self.bind("input", move |agent, detail| {
+        self.as_agent().bind("input", move |agent, detail| {
             let detail = ValueDetail::from_event(&detail).unwrap();
             f(detail);
         })
     }
 
     fn on_change<F>(&self, f: F) -> Callback
-    where
-        F: Fn(ValueDetail) + 'static,
+        where
+            F: Fn(ValueDetail) + 'static,
     {
-        self.bind("change", move |agent, detail| {
+        self.as_agent().bind("change", move |agent, detail| {
             let detail = ValueDetail::from_event(&detail).unwrap();
             f(detail);
         })
     }
+}
+
+impl<T: AgentLike> AgentExt for T {}
+
+#[macro_export]
+macro_rules! hflex {
+    ($($x:expr),*$(,)?) => {
+        div()
+            .style("display", "flex")
+            .style("flex-direction", "row")
+            .children(vec![$($x),*])
+    };
+}
+
+#[macro_export]
+macro_rules! vflex {
+    ($($x:expr),*$(,)?) => {
+        div()
+            .style("display", "flex")
+            .style("flex-direction", "column")
+            .children(vec![$($x),*])
+    };
 }

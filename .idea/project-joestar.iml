@@ -5,6 +5,7 @@
       <sourceFolder url="file://$MODULE_DIR$/joestar-demo/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/joestar/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/joestar-html/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/joestar-ui/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
